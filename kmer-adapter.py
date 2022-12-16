@@ -1,20 +1,8 @@
 #!/usr/bin/env python3
 
-import sys
+import argparse
 
 import dnaio
-
-
-def generate_kmers(sequence: str, k: int):
-    for i in range(len(sequence) - k):
-        yield sequence[i: i+k]
-
-
-def present_kmers(sequence, error_rate):
-    length = len(sequence)
-    max_errors = int(length * error_rate)
-    k = length // (max_errors + 1)
-    return [sequence[i:i+k] for i in  range(0, length, k)][:max_errors + 1]
 
 
 def illumina_truseq_candidate(sequence):
@@ -71,12 +59,24 @@ def illumina_truseq_candidate(sequence):
 
 
 def main():
-    with dnaio.open(sys.argv[1], mode="r", open_threads=0) as reader:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("fastq")
+    parser.add_argument("with_adapter")
+    parser.add_argument("no_adapter")
+    args = parser.parse_args()
+    with (
+        dnaio.open(args.fastq, mode="r", open_threads=0) as reader,
+        open(args.with_adapter, mode="wb") as with_adapter,
+        open(args.no_adapter, mode="wb") as no_adapter,
+    ):
         number_of_records = 0
         possible_adapters_found = 0
         for number_of_records, record in enumerate(reader, start=1):
             if illumina_truseq_candidate(record.sequence):
+                with_adapter.write(record.fastq_bytes())
                 possible_adapters_found += 1
+            else:
+                no_adapter.write(record.fastq_bytes())
     print(f"Percentage possible adapters: {possible_adapters_found / number_of_records}")
 
 
