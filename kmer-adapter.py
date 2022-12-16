@@ -58,8 +58,6 @@ def illumina_truseq_candidate(sequence):
 
 
 def main():
-    adapter_kmers = present_kmers(sys.argv[2], 0.1)
-    print(adapter_kmers)
     with dnaio.open(sys.argv[1], mode="r", open_threads=0) as reader:
         number_of_records = 0
         possible_adapters_found = 0
