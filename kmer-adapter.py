@@ -5,6 +5,8 @@ import argparse
 import dnaio
 
 
+from adapter_heuristic import AdapterHeuristic
+
 def illumina_truseq_candidate(sequence):
     """
     Hard-coded heuristic for the illumina TruSeq adapter.
@@ -60,10 +62,13 @@ def illumina_truseq_candidate(sequence):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--adapter")
     parser.add_argument("fastq")
     parser.add_argument("with_adapter")
     parser.add_argument("no_adapter")
     args = parser.parse_args()
+    adapter_heuristic = AdapterHeuristic(args.adapter, 3, 0.1)
+    print(adapter_heuristic.offsets_and_kmers)
     with (
         dnaio.open(args.fastq, mode="r", open_threads=0) as reader,
         open(args.with_adapter, mode="wb") as with_adapter,
@@ -72,7 +77,7 @@ def main():
         number_of_records = 0
         possible_adapters_found = 0
         for number_of_records, record in enumerate(reader, start=1):
-            if illumina_truseq_candidate(record.sequence):
+            if adapter_heuristic.adapter_possibly_present(record.sequence):
                 with_adapter.write(record.fastq_bytes())
                 possible_adapters_found += 1
             else:
