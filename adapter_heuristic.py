@@ -59,6 +59,7 @@ def find_optimal_kmers(search_sets: List[SearchSet]) -> List[Tuple[str, int]]:
             check_set |= s
         if len(check_set) < minimal_score:
             best_combination = kmer_sets
+            minimal_score = len(check_set)
     kmer_and_offsets_dict = defaultdict(list)
     for offset, kmer_set in zip(offsets, best_combination):
         for kmer in kmer_set:
