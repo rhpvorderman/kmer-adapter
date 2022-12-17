@@ -1,3 +1,4 @@
+import itertools
 from typing import List, Tuple
 
 
@@ -5,15 +6,30 @@ def _chunk(sequence: str, chunks: int) -> List[str]:
     """Chunk a sequence in chunks parts"""
     chunk_size = len(sequence) // (chunks)
     remainder = len(sequence) % (chunks)
+    chunk_sizes = remainder * [chunk_size + 1] + (chunks - remainder) * [chunk_size]
     offset = 0
     chunks = []
-    for _ in range(remainder):
-        chunks.append(sequence[offset:offset + chunk_size + 1])
-        offset += (chunk_size + 1)
-    while offset < len(sequence):
-        chunks.append(sequence[offset:offset + chunk_size])
-        offset += chunk_size
+    for size in chunk_sizes:
+        chunks.append(sequence[offset:offset + size])
+        offset += size
     return chunks
+
+
+def kmer_possibilities(sequence: str, chunks: int) -> List[List[str]]:
+    """
+    Partition a sequence in almost equal sized chunks. Return all possibilities.
+
+    Example sequence ABCDEFGH with 3 chunks. Possibilities:
+    ["ABC", "DEF", "GH"]; ["ABC", "DE", "FGH"]; ["AB", "CDE", "FGH"]
+
+    :param sequence: The sequence to b
+    :param chunks:
+    :return: A list of lists with all kmers
+    """
+    chunk_size = len(sequence) // (chunks)
+    remainder = len(sequence) % (chunks)
+    chunk_sizes = remainder * [chunk_size + 1] + (chunks - remainder) * [chunk_size]
+    possible_orderings = set(itertools.permutations(chunk_sizes))
 
 
 def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
