@@ -54,8 +54,6 @@ class AdapterHeuristic:
             chunk_offset = offset
             for chunk in chunks:
                 offsets_and_kmers.append((chunk_offset, chunk))
-                # The next chunk cannot appear before this chunk
-                chunk_offset += len(chunk)
 
         # Create kmers at least one of which should be in the read when there is a
         # an adapter
@@ -63,9 +61,6 @@ class AdapterHeuristic:
         chunk_offset = 0
         for chunk in chunks:
             offsets_and_kmers.append((chunk_offset, chunk))
-            # The next chunk cannot appear before this chunk
-            chunk_offset += len(chunk)
-
         self.offsets_and_kmers = offsets_and_kmers
 
     def adapter_possibly_present(self, sequence):
