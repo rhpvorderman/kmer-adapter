@@ -32,6 +32,7 @@ cdef class KmerFinder:
         self.number_of_kmers = number_of_entries
         cdef size_t kmer_offset = 0
         cdef char *kmer_ptr
+        cdef Py_ssize_t kmer_length
         for i, (kmer, offset) in enumerate(kmers_and_offsets):
             if not PyUnicode_CheckExact(kmer):
                 raise TypeError(f"Kmer should be a string not {type(kmer)}")
@@ -39,12 +40,13 @@ cdef class KmerFinder:
                 raise ValueError("Only ASCII strings are supported")
             self.kmer_entries[i].kmer_offset = kmer_offset
             self.kmer_entries[i].search_offset  = offset
-            kmer_length = len(kmer)
+            kmer_length = PyUnicode_GET_LENGTH(kmer)
             kmer_ptr = <char *>PyUnicode_DATA(kmer)
             memcpy(self.kmers + kmer_offset, kmer_ptr, kmer_length)
             kmer_offset += kmer_length
-            kmers[kmer_length] = 0
+            self.kmers[kmer_offset] = 0
             kmer_offset += 1
+        print(self.kmers[0:kmer_total_length + number_of_entries])
 
     def kmers_present(self, str sequence):
         cdef:
