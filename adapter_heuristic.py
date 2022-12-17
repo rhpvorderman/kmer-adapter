@@ -30,6 +30,15 @@ def kmer_possibilities(sequence: str, chunks: int) -> List[List[str]]:
     remainder = len(sequence) % (chunks)
     chunk_sizes = remainder * [chunk_size + 1] + (chunks - remainder) * [chunk_size]
     possible_orderings = set(itertools.permutations(chunk_sizes))
+    kmer_sets = []
+    for chunk_list in possible_orderings:
+        offset = 0
+        chunks = []
+        for size in chunk_list:
+            chunks.append(sequence[offset:offset + size])
+            offset += size
+        kmer_sets.append(chunks)
+    return kmer_sets
 
 
 def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
