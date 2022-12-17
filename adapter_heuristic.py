@@ -1,5 +1,7 @@
 import itertools
-from typing import List, Tuple
+import sys
+from typing import List, Set, Tuple
+from collections import defaultdict
 
 
 def _chunk(sequence: str, chunks: int) -> List[str]:
@@ -15,7 +17,7 @@ def _chunk(sequence: str, chunks: int) -> List[str]:
     return chunks
 
 
-def kmer_possibilities(sequence: str, chunks: int) -> List[List[str]]:
+def kmer_possibilities(sequence: str, chunks: int) -> List[Set[str]]:
     """
     Partition a sequence in almost equal sized chunks. Return all possibilities.
 
@@ -28,17 +30,54 @@ def kmer_possibilities(sequence: str, chunks: int) -> List[List[str]]:
     """
     chunk_size = len(sequence) // (chunks)
     remainder = len(sequence) % (chunks)
-    chunk_sizes = remainder * [chunk_size + 1] + (chunks - remainder) * [chunk_size]
+    chunk_sizes: List[int] = remainder * [chunk_size + 1] + (chunks - remainder) * [chunk_size]
     possible_orderings = set(itertools.permutations(chunk_sizes))
     kmer_sets = []
     for chunk_list in possible_orderings:
         offset = 0
-        chunks = []
+        chunk_set = set()
         for size in chunk_list:
-            chunks.append(sequence[offset:offset + size])
+            chunk_set.add(sequence[offset:offset + size])
             offset += size
-        kmer_sets.append(chunks)
+        kmer_sets.append(chunk_set)
     return kmer_sets
+
+
+# A SearchSet is an offset combined with a list of possible kmer sets which
+# should appear after this offset
+SearchSet = Tuple[int, List[Set[str]]]
+
+
+def find_optimal_kmers(search_sets: List[SearchSet]) -> List[Tuple[int, str]]:
+    minimal_score = sys.maxsize
+    best_combination = None
+    offsets = [offset for offset, kmer_set_list in search_sets]
+    kmer_set_lists = [kmer_set_list for offset, kmer_set_list in search_sets]
+    for kmer_sets in itertools.product(*kmer_set_lists):
+        check_set = set()
+        for s in kmer_sets:
+            check_set |= s
+        if len(check_set) < minimal_score:
+            best_combination = kmer_sets
+    kmer_and_offsets_dict = defaultdict(list)
+    for offset, kmer_set in zip(offsets, best_combination):
+        for kmer in kmer_set:
+            kmer_and_offsets_dict[kmer].append(offset)
+    kmers_and_offsets = []
+    for kmer, offsets in kmer_and_offsets_dict.items():
+        if len(offsets) == 1:
+            offset = offsets[0]
+        elif 0 in offsets:
+            offset = 0
+        # If all offsets have the same sign then choose the offset closest to
+        # the start.
+        elif all(offset < 0 for offset in offsets) or \
+                all(offset > 0 for offset in offsets):
+            offset = min(offsets)
+        else: # Mixed positive and negative: search the entire sequence
+            offset = 0
+        kmers_and_offsets.append((kmer, offset))
+    return kmers_and_offsets
 
 
 def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
