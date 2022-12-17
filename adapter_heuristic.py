@@ -50,7 +50,8 @@ class AdapterHeuristic:
             else:
                 next_length = adapter_length
             offset = -(next_length - 1)
-            chunks = self._chunk(adapter[:error_length], i + 2)
+            number_of_errors = i + 1
+            chunks = self._chunk(adapter[:error_length], number_of_errors + 1)
             chunk_offset = offset
             for chunk in chunks:
                 offsets_and_kmers.append((chunk_offset, chunk))
