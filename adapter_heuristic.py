@@ -48,7 +48,7 @@ def kmer_possibilities(sequence: str, chunks: int) -> List[Set[str]]:
 SearchSet = Tuple[int, List[Set[str]]]
 
 
-def find_optimal_kmers(search_sets: List[SearchSet]) -> List[Tuple[int, str]]:
+def find_optimal_kmers(search_sets: List[SearchSet]) -> List[Tuple[str, int]]:
     minimal_score = sys.maxsize
     best_combination = None
     offsets = [offset for offset, kmer_set_list in search_sets]
@@ -63,7 +63,7 @@ def find_optimal_kmers(search_sets: List[SearchSet]) -> List[Tuple[int, str]]:
     for offset, kmer_set in zip(offsets, best_combination):
         for kmer in kmer_set:
             kmer_and_offsets_dict[kmer].append(offset)
-    kmers_and_offsets = []
+    kmers_and_offsets: List[Tuple[str, int]] = []
     for kmer, offsets in kmer_and_offsets_dict.items():
         if len(offsets) == 1:
             offset = offsets[0]
@@ -86,7 +86,7 @@ def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
     max_errors = int(adapter_length * error_rate)
     error_lengths = []
     max_error = 1
-    kmers_and_offsets = []
+    search_sets: List[SearchSet] = []
     for i in range(adapter_length + 1):
         if i * error_rate >= max_error:
             error_lengths.append(i)
@@ -96,7 +96,7 @@ def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
     # if the adapter overlaps with the end.
     min_overlap_kmer = adapter[:min_overlap]
     min_overlap_kmer_offset = -(error_lengths[0] - 1)
-    kmers_and_offsets.append((min_overlap_kmer, min_overlap_kmer_offset))
+    search_sets.append((min_overlap_kmer_offset, [{min_overlap_kmer,}]))
     for i, error_length in enumerate(error_lengths):
         if (i + 1) < len(error_lengths):
             next_length = error_lengths[i + 1]
@@ -104,18 +104,14 @@ def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
             next_length = adapter_length
         offset = -(next_length - 1)
         number_of_errors = i + 1
-        chunks = _chunk(adapter[:error_length], number_of_errors + 1)
-        chunk_offset = offset
-        for chunk in chunks:
-            kmers_and_offsets.append((chunk, chunk_offset))
+        kmer_sets = kmer_possibilities(adapter[:error_length], number_of_errors + 1)
+        search_sets.append((offset, kmer_sets))
 
     # Create kmers at least one of which should be in the read when there is a
     # an adapter
-    chunks = _chunk(adapter, max_errors + 1)
-    chunk_offset = 0
-    for chunk in chunks:
-        kmers_and_offsets.append((chunk, chunk_offset))
-    return kmers_and_offsets
+    kmer_sets = kmer_possibilities(adapter, max_errors + 1)
+    search_sets.append((0, kmer_sets))
+    return find_optimal_kmers(search_sets)
 
 
 def kmers_present_in_sequence(kmers_and_offsets: List[Tuple[str, int]],
