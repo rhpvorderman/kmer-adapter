@@ -87,6 +87,14 @@ def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
             error_lengths.append(i)
             max_error += 1
 
+    # Add a couple of directly matching 1, 2, 3 and 4-mer searches.
+    # The probability of a false positive is just to high when for example
+    # a 3-mer is evaluated in more than one position.
+    min_overlap_kmer_length = 5
+    if min_overlap < min_overlap_kmer_length:
+        for i in range(min_overlap, min_overlap_kmer_length):
+            search_sets.append((-i, [{adapter[:i],}]))
+        min_overlap = min_overlap_kmer_length
     # Build up the array with chunks which should occur at the tail end
     # if the adapter overlaps with the end.
     min_overlap_kmer = adapter[:min_overlap]
