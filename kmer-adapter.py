@@ -117,6 +117,21 @@ def kmers_present_in_sequence(kmers_and_offsets: List[Tuple[str, int]],
     return False
 
 
+def kmer_probability_analysis(kmers_and_offsets: List[Tuple[str , int]],
+                              default_length: int = 150):
+    print("kmer\toffset\tconsidered sites\thit chance by random sequence (%)")
+    accumulated_not_hit_chance = 1.0
+    for kmer, offset in kmers_and_offsets:
+        kmer_length = len(kmer)
+        check_length = -offset if offset < 0 else default_length - offset
+        considered_sites = check_length - kmer_length + 1
+        single_kmer_hit_chance = 1 / 4 ** kmer_length
+        not_hit_chance = (1 - single_kmer_hit_chance) ** considered_sites
+        accumulated_not_hit_chance *= not_hit_chance
+        print(f"{kmer:10}\t{offset}\t{considered_sites}\t{(1 - not_hit_chance) * 100:.2f}")
+    print(f"Chance for profile hit by random sequence: {(1 - accumulated_not_hit_chance) * 100:.2f}%")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter")
@@ -126,7 +141,7 @@ def main():
     args = parser.parse_args()
     kmers_and_offsets = create_kmers_and_offsets(args.adapter, 3, 0.1)
     kmer_finder = KmerFinder(kmers_and_offsets)
-    print(kmers_and_offsets)
+    kmer_probability_analysis(kmers_and_offsets)
     with (
         dnaio.open(args.fastq, mode="r", open_threads=0) as reader,
         open(args.with_adapter, mode="wb") as with_adapter,
