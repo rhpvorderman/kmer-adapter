@@ -98,7 +98,7 @@ def create_kmers_and_offsets(adapter: str, min_overlap: int, error_rate: float
     # Build up the array with chunks which should occur at the tail end
     # if the adapter overlaps with the end.
     min_overlap_kmer = adapter[:min_overlap]
-    min_overlap_kmer_offset = -(error_lengths[0] - 1)
+    min_overlap_kmer_offset = -(error_lengths[0] - 1) if error_lengths else -(adapter_length - 1)
     search_sets.append((min_overlap_kmer_offset, [{min_overlap_kmer,}]))
     for i, error_length in enumerate(error_lengths):
         if (i + 1) < len(error_lengths):
