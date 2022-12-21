@@ -12,6 +12,8 @@ ctypedef struct KmerEntry:
     size_t kmer_offset
     ssize_t search_offset
 
+cdef extern from "bitap.h":
+    char *bitap_bitwise_search(char *text, char *pattern)
 
 cdef class KmerFinder:
     cdef:
@@ -73,7 +75,7 @@ cdef class KmerFinder:
             kmer_offset = entry.kmer_offset
             kmer_ptr = self.kmers + kmer_offset
             search_ptr = seq + search_offset
-            search_result = strstr(search_ptr, kmer_ptr)
+            search_result = bitap_bitwise_search(search_ptr, kmer_ptr)
             if search_result:
                 return True
         return False
