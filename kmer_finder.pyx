@@ -1,8 +1,9 @@
 # cython: language_level=3
 
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from libc.string cimport memcpy, strstr, memset
+from libc.string cimport memcpy, strstr, memset, memcmp
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
+from libc.stdint cimport uint8_t
 
 # Dnaio conveniently ensures that all sequences are ASCII only.
 DEF ASCII_CHAR_COUNT = 128
@@ -109,7 +110,7 @@ cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_lengt
         raise ValueError("The pattern is too long!")
     memset(needle_mask, 0xff, sizeof(size_t) * ASCII_CHAR_COUNT)
     for i in range(needle_length):
-        needle_mask[needle[i]] &= ~(1UL << i)
+        needle_mask[<uint8_t>needle[i]] &= ~(1UL << i)
 
 
 cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
@@ -125,7 +126,7 @@ cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
 
     for i in range(haystack_length):
         # Update the bit array
-        R |= needle_mask[haystack[i]]
+        R |= needle_mask[<uint8_t>haystack[i]]
         R <<= 1
 
         if (0 == (R & (1UL << needle_length))):
