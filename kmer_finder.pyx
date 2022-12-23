@@ -19,10 +19,28 @@ ctypedef struct KmerEntry:
 
 
 cdef class KmerFinder:
+    """
+    Find kmers in strings. To replace the following code:
+
+        kmers_and_offsets = [("AGA", -10), ("AGCATGA", 0)]
+        for kmer, offset in kmers_and_offsets:
+            sequence.find(kmer, offset)
+
+    This has a lot of python overhead. The following code is equivalent:
+
+        kmers_and_offsets = [("AGA", -10), ("AGCATGA", 0)]
+        kmer_finder = KmerFinder(kmers_and_offsets)
+        kmer_finder.kmers_present(sequence)
+
+    This is more efficient as the kmers_present method can be applied to a lot
+    of sequences and all the necessary unpacking for each kmer into C variables
+    happens only once.
+    """
     cdef:
         KmerEntry *kmer_entries
         size_t *kmer_masks
         size_t number_of_kmers
+        object kmers_and_offsets
 
     def __cinit__(self, kmers_and_offsets):
         self.kmer_masks = NULL
@@ -50,6 +68,10 @@ cdef class KmerFinder:
             kmer_ptr = <char *>PyUnicode_DATA(kmer)
             populate_needle_mask(self.kmer_masks + mask_offset, kmer_ptr, kmer_length)
             mask_offset += ASCII_CHAR_COUNT
+        self.kmers_and_offsets = kmers_and_offsets
+
+    def __reduce__(self):
+        return KmerFinder, (self.kmers_and_offsets,)
 
     def kmers_present(self, str sequence):
         cdef:
@@ -58,7 +80,6 @@ cdef class KmerFinder:
             size_t kmer_offset
             size_t kmer_length
             ssize_t search_offset
-            char *kmer_ptr
             size_t *mask_ptr
             char *search_ptr
             char *search_result
@@ -80,8 +101,8 @@ cdef class KmerFinder:
             mask_ptr = self.kmer_masks + entry.mask_offset
             search_ptr = seq + search_offset
             search_length = seq_length - (search_ptr - seq)
-            search_result = bitap_bitwise_search(search_ptr, search_length,
-                                                 mask_ptr, kmer_length)
+            search_result = shift_and_search(search_ptr, search_length,
+                                             mask_ptr, kmer_length)
             if search_result:
                 return True
         return False
@@ -100,8 +121,8 @@ cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_lengt
         needle_mask[<uint8_t>needle[i]] &= ~(1UL << i)
 
 
-cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
-                                size_t *needle_mask, size_t needle_length):
+cdef char *shift_and_search(char *haystack, size_t haystack_length,
+                            size_t *needle_mask, size_t needle_length):
     cdef:
         size_t R = ~1
         size_t i
