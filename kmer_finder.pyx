@@ -10,10 +10,12 @@ cdef extern from "Python.h":
 
 ctypedef struct KmerEntry:
     size_t kmer_offset
+    size_t kmer_length
     ssize_t search_offset
 
 cdef extern from "bitap.h":
-    char *bitap_bitwise_search(char *text, char *pattern)
+    char *bitap_bitwise_search(char *haystack, size_t haystack_length,
+                               char *needle, size_t needle_length)
 
 cdef class KmerFinder:
     cdef:
@@ -43,6 +45,7 @@ cdef class KmerFinder:
             self.kmer_entries[i].kmer_offset = kmer_offset
             self.kmer_entries[i].search_offset  = offset
             kmer_length = PyUnicode_GET_LENGTH(kmer)
+            self.kmer_entries[i].kmer_length = kmer_length;
             kmer_ptr = <char *>PyUnicode_DATA(kmer)
             memcpy(self.kmers + kmer_offset, kmer_ptr, kmer_length)
             kmer_offset += kmer_length
@@ -55,10 +58,12 @@ cdef class KmerFinder:
             KmerEntry entry
             size_t i
             size_t kmer_offset
+            size_t kmer_length
             ssize_t search_offset
             char *kmer_ptr
             char *search_ptr
             char *search_result
+            size_t search_length
         if not PyUnicode_IS_COMPACT_ASCII(sequence):
             raise ValueError("Only ASCII strings are supported")
         cdef char *seq = <char *>PyUnicode_DATA(sequence)
@@ -72,10 +77,13 @@ cdef class KmerFinder:
                     search_offset = 0
             if search_offset > seq_length:
                 continue
+            kmer_length = entry.kmer_length
             kmer_offset = entry.kmer_offset
             kmer_ptr = self.kmers + kmer_offset
             search_ptr = seq + search_offset
-            search_result = bitap_bitwise_search(search_ptr, kmer_ptr)
+            search_length = seq_length - (search_ptr - seq)
+            search_result = bitap_bitwise_search(search_ptr, search_length,
+                                                 kmer_ptr, kmer_length)
             if search_result:
                 return True
         return False

@@ -1,33 +1,34 @@
  #include <string.h>
  #include <limits.h>
+ #include <stdint.h>
 
- const char *bitap_bitwise_search(const char *text, const char *pattern)
- {
-     int m = strlen(pattern);
-     unsigned long R;
-     unsigned long pattern_mask[CHAR_MAX+1];
-     int i;
+ const char *bitap_bitwise_search(const char *haystack, size_t haystack_length,
+                                  const char *needle, size_t needle_length)
+{
+    unsigned long R;
+    unsigned long pattern_mask[CHAR_MAX+1];
+    size_t i;
 
-     if (pattern[0] == '\0') return text;
-     if (m > 31) return "The pattern is too long!";
+    if (needle_length == 0) return haystack;
+    if (needle_length > (sizeof(unsigned long) * 8 -1 ))
+        return "The pattern is too long!";
 
-     /* Initialize the bit array R */
-     R = ~1;
+    /* Initialize the bit array R */
+    R = ~1;
 
-     /* Initialize the pattern bitmasks */
-     for (i=0; i <= CHAR_MAX; ++i)
-         pattern_mask[i] = ~0;
-     for (i=0; i < m; ++i)
-         pattern_mask[pattern[i]] &= ~(1UL << i);
+    /* Initialize the pattern bitmasks */
+    memset(pattern_mask, 0xff, sizeof(unsigned long) * CHAR_MAX);
+    for (i=0; i < needle_length; ++i)
+        pattern_mask[needle[(uint8_t)i]] &= ~(1UL << i);
 
-     for (i=0; text[i] != '\0'; ++i) {
-         /* Update the bit array */
-         R |= pattern_mask[text[i]];
-         R <<= 1;
+    for (i=0; i < haystack_length; ++i) {
+        /* Update the bit array */
+        R |= pattern_mask[haystack[(uint8_t)i]];
+        R <<= 1;
 
-         if (0 == (R & (1UL << m)))
-             return (text + i - m) + 1;
+        if (0 == (R & (1UL << needle_length)))
+            return (haystack + i - needle_length) + 1;
      }
 
-     return NULL;
+    return NULL;
  }
