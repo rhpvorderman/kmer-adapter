@@ -116,20 +116,17 @@ cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_lengt
 cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
                                 size_t *needle_mask, size_t needle_length):
     cdef:
-        size_t R
+        size_t R = ~1
         size_t i
 
     if needle_length == 0:
         return haystack
-    # Initialize the bit array R
-    R = ~1
 
     for i in range(haystack_length):
         # Update the bit array
         R |= needle_mask[<uint8_t>haystack[i]]
         R <<= 1
-
         if (0 == (R & (1UL << needle_length))):
-            return (haystack + i - needle_length) + 1;
+            return (haystack + i - needle_length) + 1
 
     return NULL
