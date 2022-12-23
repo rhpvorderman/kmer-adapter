@@ -1,9 +1,9 @@
- #include <string.h>
- #include <limits.h>
- #include <stdint.h>
+#include <string.h>
+#include <limits.h>
+#include <stdint.h>
 
- const char *bitap_bitwise_search(const char *haystack, size_t haystack_length,
-                                  const char *needle, size_t needle_length)
+const char *bitap_bitwise_search(const char *haystack, size_t haystack_length,
+                                 const char *needle, size_t needle_length)
 {
     size_t R;
     size_t pattern_mask[CHAR_MAX+1];
