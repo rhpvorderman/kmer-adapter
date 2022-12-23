@@ -103,7 +103,7 @@ cdef class KmerFinder:
         PyMem_Free(self.kmer_entries)
 
 
-cdef populate_needle_mask(size_t needle_mask[ASCII_CHAR_COUNT], char *needle, size_t needle_length):
+cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_length):
     cdef size_t i
     if needle_length > (sizeof(size_t) * 8 - 1):
         raise ValueError("The pattern is too long!")
@@ -113,7 +113,7 @@ cdef populate_needle_mask(size_t needle_mask[ASCII_CHAR_COUNT], char *needle, si
 
 
 cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
-                                size_t needle_mask[ASCII_CHAR_COUNT], size_t needle_length):
+                                size_t *needle_mask, size_t needle_length):
     cdef:
         size_t R
         size_t i
