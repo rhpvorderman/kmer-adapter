@@ -1,7 +1,7 @@
 # cython: language_level=3
 
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from libc.string cimport memcpy, strstr, memset, memcmp
+from libc.string cimport memset
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
 from libc.stdint cimport uint8_t
 
