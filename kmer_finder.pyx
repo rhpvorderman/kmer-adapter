@@ -1,7 +1,7 @@
 # cython: language_level=3
 
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from libc.string cimport memcpy, strstr
+from libc.string cimport memcpy, strstr, memset
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
 
 cdef extern from "Python.h":
@@ -13,9 +13,6 @@ ctypedef struct KmerEntry:
     size_t kmer_length
     ssize_t search_offset
 
-cdef extern from "bitap.h":
-    char *bitap_bitwise_search(char *haystack, size_t haystack_length,
-                               char *needle, size_t needle_length)
 
 cdef class KmerFinder:
     cdef:
@@ -91,3 +88,34 @@ cdef class KmerFinder:
     def __dealloc__(self):
         PyMem_Free(self.kmers)
         PyMem_Free(self.kmer_entries)
+
+
+cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
+                                char *needle, size_t needle_length):
+    cdef:
+        size_t R
+        size_t pattern_mask[128]
+        size_t i
+
+    if needle_length == 0:
+        return haystack
+    if needle_length > (sizeof(size_t) * 8 -1 ):
+        return "The pattern is too long!"
+
+    # Initialize the bit array R
+    R = ~1
+
+    # Initialize the pattern bitmasks
+    memset(pattern_mask, 0xff, sizeof(size_t) * 128)
+    for i in range(needle_length):
+        pattern_mask[needle[i]] &= ~(1UL << i)
+
+    for i in range(haystack_length):
+        # Update the bit array
+        R |= pattern_mask[haystack[i]]
+        R <<= 1
+
+        if (0 == (R & (1UL << needle_length))):
+            return (haystack + i - needle_length) + 1;
+
+    return NULL
