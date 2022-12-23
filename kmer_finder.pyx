@@ -4,6 +4,9 @@ from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from libc.string cimport memcpy, strstr, memset
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
 
+# Dnaio conveniently ensures that all sequences are ASCII only.
+DEF ASCII_CHAR_COUNT = 128
+
 cdef extern from "Python.h":
     void *PyUnicode_DATA(object o)
     bint PyUnicode_IS_COMPACT_ASCII(object o)
@@ -11,6 +14,7 @@ cdef extern from "Python.h":
 ctypedef struct KmerEntry:
     size_t kmer_offset
     size_t kmer_length
+    size_t mask_offset
     ssize_t search_offset
 
 
@@ -18,6 +22,7 @@ cdef class KmerFinder:
     cdef:
         char *kmers
         KmerEntry *kmer_entries
+        size_t *kmer_masks
         size_t number_of_kmers
 
     def __cinit__(self, kmers_and_offsets):
@@ -29,9 +34,11 @@ cdef class KmerFinder:
         number_of_entries = len(kmers_and_offsets)
         self.kmer_entries = <KmerEntry *>PyMem_Malloc(number_of_entries * sizeof(KmerEntry))
         # for the kmers the NULL bytes also need space.
+        self.kmer_masks = <size_t *>PyMem_Malloc(number_of_entries * sizeof(size_t) * ASCII_CHAR_COUNT)
         self.kmers = <char *>PyMem_Malloc(kmer_total_length + number_of_entries)
         self.number_of_kmers = number_of_entries
         cdef size_t kmer_offset = 0
+        cdef size_t mask_offset = 0
         cdef char *kmer_ptr
         cdef Py_ssize_t kmer_length
         for i, (kmer, offset) in enumerate(kmers_and_offsets):
@@ -41,13 +48,16 @@ cdef class KmerFinder:
                 raise ValueError("Only ASCII strings are supported")
             self.kmer_entries[i].kmer_offset = kmer_offset
             self.kmer_entries[i].search_offset  = offset
+            self.kmer_entries[i].mask_offset = mask_offset
             kmer_length = PyUnicode_GET_LENGTH(kmer)
-            self.kmer_entries[i].kmer_length = kmer_length;
+            self.kmer_entries[i].kmer_length = kmer_length
             kmer_ptr = <char *>PyUnicode_DATA(kmer)
             memcpy(self.kmers + kmer_offset, kmer_ptr, kmer_length)
             kmer_offset += kmer_length
             self.kmers[kmer_offset] = 0
             kmer_offset += 1
+            populate_needle_mask(self.kmer_masks + mask_offset, kmer_ptr, kmer_length)
+            mask_offset += ASCII_CHAR_COUNT
         print(self.kmers[0:kmer_total_length + number_of_entries])
 
     def kmers_present(self, str sequence):
@@ -58,6 +68,7 @@ cdef class KmerFinder:
             size_t kmer_length
             ssize_t search_offset
             char *kmer_ptr
+            size_t *mask_ptr
             char *search_ptr
             char *search_result
             size_t search_length
@@ -77,47 +88,44 @@ cdef class KmerFinder:
             kmer_length = entry.kmer_length
             kmer_offset = entry.kmer_offset
             kmer_ptr = self.kmers + kmer_offset
+            mask_ptr = self.kmer_masks + entry.mask_offset
             search_ptr = seq + search_offset
             search_length = seq_length - (search_ptr - seq)
             search_result = bitap_bitwise_search(search_ptr, search_length,
-                                                 kmer_ptr, kmer_length)
+                                                 mask_ptr, kmer_length)
             if search_result:
                 return True
         return False
 
     def __dealloc__(self):
         PyMem_Free(self.kmers)
+        PyMem_Free(self.kmer_masks)
         PyMem_Free(self.kmer_entries)
 
 
-cdef populate_needle_bitmap(size_t needle_bitmap[128], char *needle, size_t needle_length):
+cdef populate_needle_mask(size_t needle_mask[ASCII_CHAR_COUNT], char *needle, size_t needle_length):
     cdef size_t i
-    memset(needle_bitmap, 0xff, sizeof(size_t) * 128)
+    if needle_length > (sizeof(size_t) * 8 - 1):
+        raise ValueError("The pattern is too long!")
+    memset(needle_mask, 0xff, sizeof(size_t) * ASCII_CHAR_COUNT)
     for i in range(needle_length):
-        needle_bitmap[needle[i]] &= ~(1UL << i)
+        needle_mask[needle[i]] &= ~(1UL << i)
 
 
 cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
-                                char *needle, size_t needle_length):
+                                size_t needle_mask[ASCII_CHAR_COUNT], size_t needle_length):
     cdef:
         size_t R
-        size_t pattern_mask[128]
         size_t i
 
     if needle_length == 0:
         return haystack
-    if needle_length > (sizeof(size_t) * 8 -1 ):
-        return "The pattern is too long!"
-
     # Initialize the bit array R
     R = ~1
 
-    # Initialize the pattern bitmasks
-    populate_needle_bitmap(pattern_mask, needle, needle_length)
-
     for i in range(haystack_length):
         # Update the bit array
-        R |= pattern_mask[haystack[i]]
+        R |= needle_mask[haystack[i]]
         R <<= 1
 
         if (0 == (R & (1UL << needle_length))):
