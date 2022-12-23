@@ -90,6 +90,13 @@ cdef class KmerFinder:
         PyMem_Free(self.kmer_entries)
 
 
+cdef populate_needle_bitmap(size_t needle_bitmap[128], char *needle, size_t needle_length):
+    cdef size_t i
+    memset(needle_bitmap, 0xff, sizeof(size_t) * 128)
+    for i in range(needle_length):
+        needle_bitmap[needle[i]] &= ~(1UL << i)
+
+
 cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
                                 char *needle, size_t needle_length):
     cdef:
@@ -106,9 +113,7 @@ cdef char *bitap_bitwise_search(char *haystack, size_t haystack_length,
     R = ~1
 
     # Initialize the pattern bitmasks
-    memset(pattern_mask, 0xff, sizeof(size_t) * 128)
-    for i in range(needle_length):
-        pattern_mask[needle[i]] &= ~(1UL << i)
+    populate_needle_bitmap(pattern_mask, needle, needle_length)
 
     for i in range(haystack_length):
         # Update the bit array
