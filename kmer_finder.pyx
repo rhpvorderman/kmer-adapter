@@ -13,7 +13,6 @@ cdef extern from "Python.h":
     bint PyUnicode_IS_COMPACT_ASCII(object o)
 
 ctypedef struct KmerEntry:
-    size_t kmer_offset
     size_t kmer_length
     size_t mask_offset
     ssize_t search_offset
@@ -21,13 +20,12 @@ ctypedef struct KmerEntry:
 
 cdef class KmerFinder:
     cdef:
-        char *kmers
         KmerEntry *kmer_entries
         size_t *kmer_masks
         size_t number_of_kmers
 
     def __cinit__(self, kmers_and_offsets):
-        self.kmers = NULL
+        self.kmer_masks = NULL
         self.kmer_entries = NULL
         self.number_of_kmers = 0
         kmers = [kmer for kmer, _ in kmers_and_offsets]
@@ -36,9 +34,7 @@ cdef class KmerFinder:
         self.kmer_entries = <KmerEntry *>PyMem_Malloc(number_of_entries * sizeof(KmerEntry))
         # for the kmers the NULL bytes also need space.
         self.kmer_masks = <size_t *>PyMem_Malloc(number_of_entries * sizeof(size_t) * ASCII_CHAR_COUNT)
-        self.kmers = <char *>PyMem_Malloc(kmer_total_length + number_of_entries)
         self.number_of_kmers = number_of_entries
-        cdef size_t kmer_offset = 0
         cdef size_t mask_offset = 0
         cdef char *kmer_ptr
         cdef Py_ssize_t kmer_length
@@ -47,19 +43,13 @@ cdef class KmerFinder:
                 raise TypeError(f"Kmer should be a string not {type(kmer)}")
             if not PyUnicode_IS_COMPACT_ASCII(kmer):
                 raise ValueError("Only ASCII strings are supported")
-            self.kmer_entries[i].kmer_offset = kmer_offset
             self.kmer_entries[i].search_offset  = offset
             self.kmer_entries[i].mask_offset = mask_offset
             kmer_length = PyUnicode_GET_LENGTH(kmer)
             self.kmer_entries[i].kmer_length = kmer_length
             kmer_ptr = <char *>PyUnicode_DATA(kmer)
-            memcpy(self.kmers + kmer_offset, kmer_ptr, kmer_length)
-            kmer_offset += kmer_length
-            self.kmers[kmer_offset] = 0
-            kmer_offset += 1
             populate_needle_mask(self.kmer_masks + mask_offset, kmer_ptr, kmer_length)
             mask_offset += ASCII_CHAR_COUNT
-        print(self.kmers[0:kmer_total_length + number_of_entries])
 
     def kmers_present(self, str sequence):
         cdef:
@@ -87,8 +77,6 @@ cdef class KmerFinder:
             if search_offset > seq_length:
                 continue
             kmer_length = entry.kmer_length
-            kmer_offset = entry.kmer_offset
-            kmer_ptr = self.kmers + kmer_offset
             mask_ptr = self.kmer_masks + entry.mask_offset
             search_ptr = seq + search_offset
             search_length = seq_length - (search_ptr - seq)
@@ -99,7 +87,6 @@ cdef class KmerFinder:
         return False
 
     def __dealloc__(self):
-        PyMem_Free(self.kmers)
         PyMem_Free(self.kmer_masks)
         PyMem_Free(self.kmer_entries)
 
