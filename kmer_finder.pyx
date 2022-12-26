@@ -1,7 +1,7 @@
 # cython: language_level=3
 
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
-from libc.string cimport memset
+from libc.string cimport memset, strlen
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
 from libc.stdint cimport uint8_t
 
@@ -41,11 +41,15 @@ cdef class KmerFinder:
         size_t *kmer_masks
         size_t number_of_kmers
         object kmers_and_offsets
+        readonly bint ref_wildcards
+        readonly bint query_wildcards
 
-    def __cinit__(self, kmers_and_offsets):
+    def __cinit__(self, kmers_and_offsets, ref_wildcards=False, query_wildcards=False):
         self.kmer_masks = NULL
         self.kmer_entries = NULL
         self.number_of_kmers = 0
+        self.ref_wildcards = ref_wildcards
+        self.query_wildcards = query_wildcards
         kmers = [kmer for kmer, _ in kmers_and_offsets]
         kmer_total_length = sum(len(kmer) for kmer in kmers)
         number_of_entries = len(kmers_and_offsets)
@@ -66,7 +70,8 @@ cdef class KmerFinder:
             kmer_length = PyUnicode_GET_LENGTH(kmer)
             self.kmer_entries[i].kmer_length = kmer_length
             kmer_ptr = <char *>PyUnicode_DATA(kmer)
-            populate_needle_mask(self.kmer_masks + mask_offset, kmer_ptr, kmer_length)
+            populate_needle_mask(self.kmer_masks + mask_offset, kmer_ptr, kmer_length,
+                                 self.ref_wildcards, self.query_wildcards)
             mask_offset += ASCII_CHAR_COUNT
         self.kmers_and_offsets = kmers_and_offsets
 
@@ -112,13 +117,87 @@ cdef class KmerFinder:
         PyMem_Free(self.kmer_entries)
 
 
-cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_length):
+cdef void set_masks(size_t *needle_mask, size_t pos, char *chars):
+    cdef char c
     cdef size_t i
+    for i in range(strlen(chars)):
+        needle_mask[<uint8_t>chars[i]] &= ~(1UL << pos)
+
+cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_length,
+                          bint ref_wildcards, query_wildcards):
+    cdef size_t i
+    cdef char c
     if needle_length > (sizeof(size_t) * 8 - 1):
         raise ValueError("The pattern is too long!")
     memset(needle_mask, 0xff, sizeof(size_t) * ASCII_CHAR_COUNT)
     for i in range(needle_length):
-        needle_mask[<uint8_t>needle[i]] &= ~(1UL << i)
+        c = needle[i]
+        if c == b"A" or c == b"a":
+            set_masks(needle_mask, i, "Aa")
+            if query_wildcards:
+                set_masks(needle_mask, i, "RWMDHVNrwmdhvn")
+        elif c == b"C" or c == b"c":
+            set_masks(needle_mask, i, "Cc")
+            if query_wildcards:
+                set_masks(needle_mask, i, "YSMBHVNysmbhvn")
+        elif c == b"G" or c == b"g":
+            set_masks(needle_mask, i, "Gg")
+            if query_wildcards:
+                set_masks(needle_mask, i, "RSKBDVNrskbdvn")
+        elif c == b"T" or c == b"t":
+            set_masks(needle_mask, i, "Tt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "YWKBDHNywkbdhn")
+        elif (c == b"U" or c == b"u") and ref_wildcards:
+            set_masks(needle_mask, i, "TtUu")
+            if query_wildcards:
+                set_masks(needle_mask, i, "YWKBDHNywkbdhn")
+        elif (c == b"R" or c == b"r") and ref_wildcards:
+            set_masks(needle_mask, i, "AaGg")
+            if query_wildcards:
+                set_masks(needle_mask, i, "RDVNrdvn")
+        elif (c == b"Y" or c == b"y") and ref_wildcards:
+            set_masks(needle_mask, i, "CcTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "YBHNybhn")
+        elif (c == b"S" or c == b"s") and ref_wildcards:
+            set_masks(needle_mask, i, "GgCc")
+            if query_wildcards:
+                set_masks(needle_mask, i, "SBVNsbvn")
+        elif (c == b"W" or c == b"w") and ref_wildcards:
+            set_masks(needle_mask, i, "AaTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "WDHNwdhn")
+        elif (c == b"K" or c == b"k") and ref_wildcards:
+            set_masks(needle_mask, i, "GgTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "KBDNkbdn")
+        elif (c == b"M" or c == b"m") and ref_wildcards:
+            set_masks(needle_mask, i, "AaCc")
+            if query_wildcards:
+                set_masks(needle_mask, i, "MHVNmhvn")
+        elif (c == b"B" or  c == b"b") and ref_wildcards:
+            set_masks(needle_mask, i, "CcGgTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "BNbn")
+        elif (c == b"D" or c == b"d") and ref_wildcards:
+            set_masks(needle_mask, i, "AaGgTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "DNdn")
+        elif (c == b"H" or c == b"h") and ref_wildcards:
+            set_masks(needle_mask, i, "AaCcTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "HNhn")
+        elif (c == b"V" or c == b"v") and ref_wildcards:
+            set_masks(needle_mask, i, "AaCcGg")
+            if query_wildcards:
+                set_masks(needle_mask, i, "VNvn")
+        elif (c == b"N" or c == b"n") and ref_wildcards:
+            set_masks(needle_mask, i, "AaCcGgTt")
+            if query_wildcards:
+                set_masks(needle_mask, i, "URYSWKMBDHVNuryswkmbdhvn")
+        else:
+            needle_mask[<uint8_t>c] &= ~(1UL << i)
 
 
 cdef char *shift_and_search(char *haystack, size_t haystack_length,
