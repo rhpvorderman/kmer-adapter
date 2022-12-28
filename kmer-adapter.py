@@ -222,11 +222,13 @@ def kmer_probability_analysis(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter")
+    parser.add_argument("--anywhere", type=bool)
     parser.add_argument("fastq")
     parser.add_argument("with_adapter")
     parser.add_argument("no_adapter")
     args = parser.parse_args()
-    kmers_and_offsets = create_kmers_and_offsets(args.adapter, 3, 0.1)
+    kmers_and_offsets = create_kmers_and_offsets(
+        args.adapter, 3, 0.1, back_adapter=True, front_adapter=args.anywhere)
     kmer_finder = KmerFinder(kmers_and_offsets)
     kmer_probability_analysis(kmers_and_offsets)
     with (
