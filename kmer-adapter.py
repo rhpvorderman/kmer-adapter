@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import io
 import itertools
 import sys
 from typing import List, Optional, Set, Tuple
@@ -137,7 +138,7 @@ def create_back_overlap_searchsets(
     # if the adapter overlaps with the end.
     min_overlap_kmer = adapter[:min_overlap]
     min_overlap_kmer_start = (
-        -(error_lengths[0] - 1) if error_lengths else -(adapter_length - 1)
+        -(error_lengths[0] - 1) if error_lengths else -adapter_length
     )
     search_sets.append(
         (
@@ -152,22 +153,23 @@ def create_back_overlap_searchsets(
     )
     for i, error_length in enumerate(error_lengths):
         if (i + 1) < len(error_lengths):
-            next_length = error_lengths[i + 1]
+            check_length = error_lengths[i + 1] - 1
         else:
-            next_length = adapter_length
-        start = -(next_length - 1)
+            check_length = adapter_length
+        start = -check_length
         number_of_errors = i + 1
         kmer_sets = kmer_possibilities(adapter[:error_length], number_of_errors + 1)
         search_sets.append((start, None, kmer_sets))
     return search_sets
 
 
-def create_kmers_and_offsets(
+def create_kmers_and_positions(
     adapter: str,
     min_overlap: int,
     error_rate: float,
     back_adapter: bool,
     front_adapter: bool,
+    internal: bool = True,
 ) -> List[Tuple[str, int, Optional[int]]]:
     max_errors = int(len(adapter) * error_rate)
     search_sets = []
@@ -190,15 +192,19 @@ def create_kmers_and_offsets(
             ]
             front_search_sets.append((0, -start, new_kmer_sets))
         search_sets.extend(front_search_sets)
-    kmer_sets = kmer_possibilities(adapter, max_errors + 1)
-    search_sets.append((0, None, kmer_sets))
+    if internal:
+        kmer_sets = kmer_possibilities(adapter, max_errors + 1)
+        search_sets.append((0, None, kmer_sets))
     return find_optimal_kmers(search_sets)
 
 
 def kmer_probability_analysis(
     kmers_and_offsets: List[Tuple[str, int, Optional[int]]], default_length: int = 150
-):
-    print("kmer\tstart\tstop\tconsidered sites\thit chance by random sequence (%)")
+) -> str:
+    out = io.StringIO()
+    out.write(
+        "kmer\tstart\tstop\tconsidered sites\thit chance by random sequence (%)\n"
+    )
     accumulated_not_hit_chance = 1.0
     for kmer, start, stop in kmers_and_offsets:
         kmer_length = len(kmer)
@@ -211,12 +217,13 @@ def kmer_probability_analysis(
         single_kmer_hit_chance = 1 / 4**kmer_length
         not_hit_chance = (1 - single_kmer_hit_chance) ** considered_sites
         accumulated_not_hit_chance *= not_hit_chance
-        print(
-            f"{kmer:10}\t{start}\t{stop}\t{considered_sites}\t{(1 - not_hit_chance) * 100:.2f}"
+        out.write(
+            f"{kmer:10}\t{start}\t{stop}\t{considered_sites}\t{(1 - not_hit_chance) * 100:.2f}\n"
         )
-    print(
-        f"Chance for profile hit by random sequence: {(1 - accumulated_not_hit_chance) * 100:.2f}%"
+    out.write(
+        f"Chance for profile hit by random sequence: {(1 - accumulated_not_hit_chance) * 100:.2f}%\n"
     )
+    return out.getvalue()
 
 
 def main():
@@ -227,10 +234,10 @@ def main():
     parser.add_argument("with_adapter")
     parser.add_argument("no_adapter")
     args = parser.parse_args()
-    kmers_and_offsets = create_kmers_and_offsets(
+    kmers_and_offsets = create_kmers_and_positions(
         args.adapter, 3, 0.1, back_adapter=True, front_adapter=args.anywhere)
     kmer_finder = KmerFinder(kmers_and_offsets)
-    kmer_probability_analysis(kmers_and_offsets)
+    print(kmer_probability_analysis(kmers_and_offsets))
     with (
         dnaio.open(args.fastq, mode="r", open_threads=0) as reader,
         open(args.with_adapter, mode="wb") as with_adapter,
