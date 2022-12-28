@@ -222,7 +222,7 @@ def kmer_probability_analysis(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter")
-    parser.add_argument("--anywhere", type=bool)
+    parser.add_argument("--anywhere", action="store_true")
     parser.add_argument("fastq")
     parser.add_argument("with_adapter")
     parser.add_argument("no_adapter")
