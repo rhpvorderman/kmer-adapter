@@ -24,14 +24,20 @@ cdef class KmerFinder:
     Find kmers in strings. To replace the following code:
 
         kmers_and_positions = [("AGA", -10, None), ("AGCATGA", 0, None)]
-        for kmer, start, stop in kmers_and_positions:
-            sequence.find(kmer, start, stop)
+        for sequence in sequences:
+            for kmer, start, stop in kmers_and_positions:
+                if sequence.find(kmer, start, stop) != -1:
+                    # do something
+                    pass
 
     This has a lot of python overhead. The following code is equivalent:
 
         kmers_and_positions = [("AGA", -10, None), ("AGCATGA", 0, None)]
         kmer_finder = KmerFinder(kmers_and_positions)
-        kmer_finder.kmers_present(sequence)
+        for sequence in sequences:
+            if kmer_finder.kmers_present(sequence):
+                # do something
+                pass
 
     This is more efficient as the kmers_present method can be applied to a lot
     of sequences and all the necessary unpacking for each kmer into C variables
@@ -78,7 +84,7 @@ cdef class KmerFinder:
         self.kmers_and_positions = kmers_and_positions
 
     def __reduce__(self):
-        return KmerFinder, (self.kmers_and_positions,)
+        return KmerFinder, (self.kmers_and_positions, self.ref_wildcards, self.query_wildcards)
 
     def kmers_present(self, str sequence):
         cdef:
@@ -138,6 +144,7 @@ cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_lengt
                           bint ref_wildcards, bint query_wildcards):
     cdef size_t i
     cdef char c
+    cdef uint8_t j
     if needle_length > (sizeof(size_t) * 8 - 1):
         raise ValueError("The pattern is too long!")
     memset(needle_mask, 0xff, sizeof(size_t) * ASCII_CHAR_COUNT)
@@ -166,53 +173,49 @@ cdef populate_needle_mask(size_t *needle_mask, char *needle, size_t needle_lengt
         elif (c == b"R" or c == b"r") and ref_wildcards:
             set_masks(needle_mask, i, "AaGg")
             if query_wildcards:
-                set_masks(needle_mask, i, "RDVNrdvn")
+                set_masks(needle_mask, i, "RSWKMBDHVNrswkmvdhvn")
         elif (c == b"Y" or c == b"y") and ref_wildcards:
-            set_masks(needle_mask, i, "CcTt")
+            set_masks(needle_mask, i, "CcTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "YBHNybhn")
+                set_masks(needle_mask, i, "YSWKMBDHVNyswkmbdhvn")
         elif (c == b"S" or c == b"s") and ref_wildcards:
             set_masks(needle_mask, i, "GgCc")
             if query_wildcards:
-                set_masks(needle_mask, i, "SBVNsbvn")
+                set_masks(needle_mask, i, "YRSKMBDHVNyrskmbdhvn")
         elif (c == b"W" or c == b"w") and ref_wildcards:
-            set_masks(needle_mask, i, "AaTt")
+            set_masks(needle_mask, i, "AaTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "WDHNwdhn")
+                set_masks(needle_mask, i, "YRWKMBDHVNyrskmbdhvn")
         elif (c == b"K" or c == b"k") and ref_wildcards:
-            set_masks(needle_mask, i, "GgTt")
+            set_masks(needle_mask, i, "GgTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "KBDNkbdn")
+                set_masks(needle_mask, i, "YRWSKBDHVNyrskmbdhvn")
         elif (c == b"M" or c == b"m") and ref_wildcards:
             set_masks(needle_mask, i, "AaCc")
             if query_wildcards:
-                set_masks(needle_mask, i, "MHVNmhvn")
+                set_masks(needle_mask, i, "YRWSMBDHVNyrskmbdhvn")
         elif (c == b"B" or  c == b"b") and ref_wildcards:
-            set_masks(needle_mask, i, "CcGgTt")
+            set_masks(needle_mask, i, "CcGgTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "BNbn")
+                set_masks(needle_mask, i, "RYSWKMBDHVNryswkmbdhvn")
         elif (c == b"D" or c == b"d") and ref_wildcards:
-            set_masks(needle_mask, i, "AaGgTt")
+            set_masks(needle_mask, i, "AaGgTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "DNdn")
+                set_masks(needle_mask, i, "RYSWKMBDHVNryswkmbdhvn")
         elif (c == b"H" or c == b"h") and ref_wildcards:
-            set_masks(needle_mask, i, "AaCcTt")
+            set_masks(needle_mask, i, "AaCcTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "HNhn")
+                set_masks(needle_mask, i, "RYSWKMBDHVNryswkmbdhvn")
         elif (c == b"V" or c == b"v") and ref_wildcards:
             set_masks(needle_mask, i, "AaCcGg")
             if query_wildcards:
-                set_masks(needle_mask, i, "VNvn")
+                set_masks(needle_mask, i, "RYSWKMBDHVNryswkmbdhvn")
         elif (c == b"N" or c == b"n") and ref_wildcards:
             if query_wildcards:  # Proper IUPAC matching
-                set_masks(needle_mask, i, "URYSWKMBDHVNuryswkmbdhvn")
+                set_masks(needle_mask, i, "ACGTURYSWKMBDHVNacgturyswkmbdhvn")
             else:  # N matches literally everything except \00
-                set_masks(needle_mask, i,
-                          "\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\x0c\r\x0e"
-                          "\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a"
-                          "\x1b\x1c\x1d\x1e\x1f !\"#$%&'()*+,-./0123456789:;<="
-                          ">?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmno"
-                          "pqrstuvwxyz{|}~\x7f")
+                for j in range(1,128):
+                    needle_mask[j] &= ~(1UL << i)
         else:
             needle_mask[<uint8_t>c] &= ~(1UL << i)
 
@@ -230,7 +233,7 @@ cdef char *shift_or_search(char *haystack, size_t haystack_length,
         # Update the bit array
         R |= needle_mask[<uint8_t>haystack[i]]
         R <<= 1
-        if (0 == (R & (1UL << needle_length))):
+        if (0 == (R & (1ULL << needle_length))):
             return (haystack + i - needle_length) + 1
 
     return NULL
