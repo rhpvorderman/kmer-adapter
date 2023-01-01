@@ -43,16 +43,33 @@ O(mn).
     a char pointer since only the presence or non-presence is important. It 
     is therefore possible to bitwise AND everything together and only check at
     the end if it is zero. This eliminates an if-comparison in the loop. 
-    This is **slower**. The slowest part in the loop is the bitmask lookup
+    
+    Result: This is **slower**. The slowest part in the loop is the bitmask lookup
     due to the lookup table being ASCII_WIDTH * sizeof(size_t) big (128 * 8) == 1KB.
     This is larger than a cacheline (64 bytes) but smaller than the l1 cache. 
     Expected lookup time is therefore 3-4 clockticks. This is slower than an
     if-comparison. Therefore for every item in the loop and exiting early is
     faster.
+  - [x] Speedier lookups by providing the `restrict` keyword. Result: no effect.
   - [x] Different integer sizes. In theory, we can fit 32 16-bit integers on 
     a 64 byte cacheline. In theory we can therefore do the shift-or search
-    with the same cacheline if all characters compared are ACGT only. In 
-    practice `size_t` integers (64-bit on 64-bit architecture) is the fastest. 
+    with the same cacheline if all characters compared are ACGT only. 
+    
+    Result: In practice `size_t` integers (64-bit on 64-bit architecture) is 
+    the fastest. 
     Probably because the cache-line advantage is not there and the bitwise
     operations are faster using the native register size.
+  - [ ] Since memory lookups are expensive (3-4 clockticks in L1 cache) try if
+    saving the bitmasks for A, C, G, T and using a switch case is faster.
+    (Default can still be the lookup table in case it is not ACGT.) 
+
+    Result: TBD
+  - [ ] Since only 16 IUPAC characters in a 26-letter alphabet are used and 
+    case is not important we can in theory use a much smaller lookup table. 
+    since the last 5 bits for both ASCII uppercase and ASCII lowercase are the
+    same a lookup table of size 32 can be used by bitmasking the last 5 bits.
+    Worst-case is that false positives occur when characters are not in the
+    alphabet range. This is okay, because false positives will be correclty 
+    handled by the alignment algorithm anyway.
   
+    Result: TBD
