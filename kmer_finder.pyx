@@ -96,13 +96,13 @@ cdef class KmerFinder:
             size_t kmer_offset
             size_t kmer_length
             ssize_t start, stop
-            bitmask_t *mask_ptr
-            char *search_ptr
-            char *search_result
+            const bitmask_t *mask_ptr
+            const char *search_ptr
+            const char *search_result
             ssize_t search_length
         if not PyUnicode_IS_COMPACT_ASCII(sequence):
             raise ValueError("Only ASCII strings are supported")
-        cdef char *seq = <char *>PyUnicode_DATA(sequence)
+        cdef const char *seq = <char *>PyUnicode_DATA(sequence)
         cdef Py_ssize_t seq_length = PyUnicode_GET_LENGTH(sequence)
         for i in range(self.number_of_kmers):
             entry = self.kmer_entries[i]
@@ -137,13 +137,13 @@ cdef class KmerFinder:
         PyMem_Free(self.kmer_entries)
 
 
-cdef void set_masks(bitmask_t *needle_mask, size_t pos, char *chars):
+cdef void set_masks(bitmask_t *needle_mask, size_t pos, const char *chars):
     cdef char c
     cdef size_t i
     for i in range(strlen(chars)):
         needle_mask[<uint8_t>chars[i]] &= ~(<bitmask_t>1ULL << pos)
 
-cdef populate_needle_mask(bitmask_t *needle_mask, char *needle, size_t needle_length,
+cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t needle_length,
                           bint ref_wildcards, bint query_wildcards):
     cdef size_t i
     cdef char c
@@ -223,8 +223,8 @@ cdef populate_needle_mask(bitmask_t *needle_mask, char *needle, size_t needle_le
             needle_mask[<uint8_t>c] &= ~(<bitmask_t>1ULL << i)
 
 
-cdef char *shift_or_search(char *haystack, size_t haystack_length,
-                            bitmask_t *needle_mask, size_t needle_length):
+cdef const char *shift_or_search(const char *haystack, size_t haystack_length,
+                           const bitmask_t *needle_mask, size_t needle_length):
     cdef:
         bitmask_t R = ~1
         size_t i
