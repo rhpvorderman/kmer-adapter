@@ -225,16 +225,32 @@ cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t nee
 
 cdef const char *shift_or_search(const char *haystack, size_t haystack_length,
                            const bitmask_t *needle_mask, size_t needle_length):
+    if needle_length == 0:
+        return haystack
     cdef:
         bitmask_t R = ~1
         size_t i
-
-    if needle_length == 0:
-        return haystack
+        size_t A_bitmask = needle_mask[b"A"]
+        size_t C_bitmask = needle_mask[b"C"]
+        size_t G_bitmask = needle_mask[b"G"]
+        size_t T_bitmask = needle_mask[b"T"]
+        size_t mask;
+        uint8_t idx
 
     for i in range(haystack_length):
         # Update the bit array
-        R |= needle_mask[<uint8_t>haystack[i]]
+        idx = <uint8_t>haystack[i]
+        if idx == b"A":
+            mask = A_bitmask
+        elif idx == b"C":
+            mask = C_bitmask
+        elif idx == b"G":
+            mask = G_bitmask
+        elif idx == b"T":
+            mask = T_bitmask
+        else:
+            mask = needle_mask[idx]
+        R |= mask
         R <<= 1
         if (0 == (R & (<bitmask_t>1ULL << needle_length))):
             return (haystack + i - needle_length) + 1
