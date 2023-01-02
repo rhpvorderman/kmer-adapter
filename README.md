@@ -59,12 +59,13 @@ O(mn).
     the fastest. 
     Probably because the cache-line advantage is not there and the bitwise
     operations are faster using the native register size.
-  - [ ] Since memory lookups are expensive (3-4 clockticks in L1 cache) try if
+  - [x] Since memory lookups are expensive (3-4 clockticks in L1 cache) try if
     saving the bitmasks for A, C, G, T and using a switch case is faster.
     (Default can still be the lookup table in case it is not ACGT.) 
 
-    Result: TBD
-  - [ ] Since only 16 IUPAC characters in a 26-letter alphabet are used and 
+    Result: This is much slower. The branching instructions created
+    are very hard to predict (A,C,G,T can occur in any order). 
+  - [x] Since only 16 IUPAC characters in a 26-letter alphabet are used and 
     case is not important we can in theory use a much smaller lookup table. 
     since the last 5 bits for both ASCII uppercase and ASCII lowercase are the
     same a lookup table of size 32 can be used by bitmasking the last 5 bits.
@@ -72,4 +73,5 @@ O(mn).
     alphabet range. This is okay, because false positives will be correclty 
     handled by the alignment algorithm anyway.
   
-    Result: TBD
+    Result: This is slightly slower due to the index mask that is needed. 
+    Apparrently the smaller index size has no effect.
