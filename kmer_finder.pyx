@@ -6,7 +6,8 @@ from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
 from libc.stdint cimport uint8_t
 
 # Dnaio conveniently ensures that all sequences are ASCII only.
-DEF BITMASK_INDEX_SIZE = 128
+DEF BITMASK_INDEX_SIZE = 32
+DEF INDEX_MASK = 0b11111
 
 # Make bitmask type definable. size_t is the largest unsigned integer available
 # to the machine.
@@ -142,7 +143,7 @@ cdef void set_masks(bitmask_t *needle_mask, size_t pos, const char *chars):
     cdef char c
     cdef size_t i
     for i in range(strlen(chars)):
-        needle_mask[<uint8_t>chars[i]] &= ~(<bitmask_t>1ULL << pos)
+        needle_mask[<uint8_t>chars[i] & INDEX_MASK] &= ~(<bitmask_t>1ULL << pos)
 
 cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t needle_length,
                           bint ref_wildcards, bint query_wildcards):
@@ -218,10 +219,10 @@ cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t nee
             if query_wildcards:  # Proper IUPAC matching
                 set_masks(needle_mask, i, "ACGTURYSWKMBDHVNacgturyswkmbdhvn")
             else:  # N matches literally everything except \00
-                for j in range(1,128):
+                for j in range(1, BITMASK_INDEX_SIZE):
                     needle_mask[j] &= ~(<bitmask_t>1ULL << i)
         else:
-            needle_mask[<uint8_t>c] &= ~(<bitmask_t>1ULL << i)
+            needle_mask[<uint8_t>c & INDEX_MASK] &= ~(<bitmask_t>1ULL << i)
 
 
 cdef const char *shift_or_search(const char *haystack, size_t haystack_length,
@@ -235,7 +236,7 @@ cdef const char *shift_or_search(const char *haystack, size_t haystack_length,
 
     for i in range(haystack_length):
         # Update the bit array
-        R |= needle_mask[<uint8_t>haystack[i]]
+        R |= needle_mask[<uint8_t>haystack[i] & INDEX_MASK]
         R <<= 1
         if (0 == (R & (<bitmask_t>1ULL << needle_length))):
             return (haystack + i - needle_length) + 1
