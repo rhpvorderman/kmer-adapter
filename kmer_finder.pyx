@@ -2,6 +2,7 @@
 
 from cpython.mem cimport PyMem_Malloc, PyMem_Free
 from libc.string cimport memset, strlen
+
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
 from libc.stdint cimport uint8_t
 
@@ -25,7 +26,12 @@ ctypedef struct KmerEntry:
 
 cdef class KmerFinder:
     """
-    Find kmers in strings. To replace the following code:
+    Find kmers in strings. Allows case-independent and IUPAC matching.
+    ``ref_wildcards=True`` allows IUPAC characters in the kmer sequences.
+    ``query_wildcards=True`` allows IUPAC characters in the sequences fed to
+    the ``kmers_present`` method.
+
+    Replaces the following code:
 
         kmers_and_positions = [("AGA", -10, None), ("AGCATGA", 0, None)]
         for sequence in sequences:
@@ -34,7 +40,8 @@ cdef class KmerFinder:
                     # do something
                     pass
 
-    This has a lot of python overhead. The following code is equivalent:
+    This has a lot of python overhead. The following code accomplishes the
+    same task and allows for case-independent matching:
 
         kmers_and_positions = [("AGA", -10, None), ("AGCATGA", 0, None)]
         kmer_finder = KmerFinder(kmers_and_positions)
@@ -168,16 +175,18 @@ cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t nee
                 set_masks(needle_mask, i, "RSKBDVNrskbdvn")
         elif c == b"T" or c == b"t":
             set_masks(needle_mask, i, "Tt")
+            if ref_wildcards:
+                set_masks(needle_mask, i, "Uu")
             if query_wildcards:
-                set_masks(needle_mask, i, "YWKBDHNywkbdhn")
-        elif (c == b"U" or c == b"u") and ref_wildcards:
+                set_masks(needle_mask, i, "UYWKBDHNuywkbdhn")
+        elif (c == b"U" or c == b"u") and (ref_wildcards or query_wildcards):
             set_masks(needle_mask, i, "TtUu")
             if query_wildcards:
                 set_masks(needle_mask, i, "YWKBDHNywkbdhn")
         elif (c == b"R" or c == b"r") and ref_wildcards:
             set_masks(needle_mask, i, "AaGg")
             if query_wildcards:
-                set_masks(needle_mask, i, "RSWKMBDHVNrswkmvdhvn")
+                set_masks(needle_mask, i, "RSWKMBDHVNrswkmbdhvn")
         elif (c == b"Y" or c == b"y") and ref_wildcards:
             set_masks(needle_mask, i, "CcTtUu")
             if query_wildcards:
@@ -189,15 +198,15 @@ cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t nee
         elif (c == b"W" or c == b"w") and ref_wildcards:
             set_masks(needle_mask, i, "AaTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "YRWKMBDHVNyrskmbdhvn")
+                set_masks(needle_mask, i, "YRWKMBDHVNyrwkmbdhvn")
         elif (c == b"K" or c == b"k") and ref_wildcards:
             set_masks(needle_mask, i, "GgTtUu")
             if query_wildcards:
-                set_masks(needle_mask, i, "YRWSKBDHVNyrskmbdhvn")
+                set_masks(needle_mask, i, "YRWSKBDHVNyrwskbdhvn")
         elif (c == b"M" or c == b"m") and ref_wildcards:
             set_masks(needle_mask, i, "AaCc")
             if query_wildcards:
-                set_masks(needle_mask, i, "YRWSMBDHVNyrskmbdhvn")
+                set_masks(needle_mask, i, "YRWSMBDHVNyrwsmbdhvn")
         elif (c == b"B" or  c == b"b") and ref_wildcards:
             set_masks(needle_mask, i, "CcGgTtUu")
             if query_wildcards:
@@ -220,8 +229,19 @@ cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t nee
             else:  # N matches literally everything except \00
                 for j in range(1,128):
                     needle_mask[j] &= ~(<bitmask_t>1ULL << i)
+        elif query_wildcards and not ref_wildcards:
+            # All non-AGCT characters match to N
+            set_masks(needle_mask, i, "Nn")
+        elif ref_wildcards:
+            # ref and query wildcards are True. Perform proper IUPAC matching.
+            # All unknown characters do not match.
+            pass
         else:
-            needle_mask[<uint8_t>c] &= ~(<bitmask_t>1ULL << i)
+            if chr(c).isalpha():
+                bothcase = chr(c).lower() + chr(c).upper()
+                set_masks(needle_mask, i, bothcase.encode("ascii"))
+            else:
+                needle_mask[<uint8_t>c] &= ~(<bitmask_t>1ULL << i)
 
 
 cdef const char *shift_or_search(const char *haystack, size_t haystack_length,
