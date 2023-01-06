@@ -79,6 +79,12 @@ cdef class KmerFinder:
         cdef size_t offset
         cdef bitmask_t zero_mask, found_mask
         cdef Py_ssize_t kmer_length
+        # The maximum length of words + null bytes that we can store in
+        # the bitmask array
+        cdef size_t max_total_length = sizeof(bitmask_t) * 8
+        # The maximum length of a word. Since word_length + 1 bits are needed to search.
+        cdef ssize_t max_word_length = max_total_length - 1
+
         for i, (start, stop, kmers) in enumerate(positions_and_kmers):
             memset(search_word, 0, 64)
             offset = 0
@@ -89,8 +95,11 @@ cdef class KmerFinder:
                     raise TypeError(f"Kmer should be a string not {type(kmer)}")
                 if not PyUnicode_IS_COMPACT_ASCII(kmer):
                     raise ValueError("Only ASCII strings are supported")
-                zero_mask ^= <bitmask_t>1ULL << offset
                 kmer_length = PyUnicode_GET_LENGTH(kmer)
+                if kmer_length > max_word_length:
+                    raise ValueError(f"{kmer} of length {kmer_length} is longer "
+                                     f"than the maximum of {max_word_length}.")
+                zero_mask ^= <bitmask_t>1ULL << offset
                 kmer_ptr = <char *> PyUnicode_DATA(kmer)
                 memcpy(search_word + offset, kmer_ptr, kmer_length)
                 search_word[offset + kmer_length] = 0

@@ -78,3 +78,10 @@ def test_kmer_finder_per_char_matching(
                 raise ValueError(
                     f"{char} should{' ' if should_match else ' not '}match {comp_char}"
                 )
+
+
+def test_kmer_finder_initialize_bigword():
+    with pytest.raises(ValueError) as error:
+        KmerFinder([(0, None, ["A" * 64])])
+    error.match("A" * 64)
+    error.match("64")
