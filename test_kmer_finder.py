@@ -94,3 +94,16 @@ def test_kmer_finder_initialize_total_greater_than_max():
     assert kmer_finder.kmers_present("X" * 100 + "C" * 31)
     assert kmer_finder.kmers_present("X" * 100 + "D" * 43)
     assert not kmer_finder.kmers_present(string.ascii_letters)
+
+
+def test_kmer_finder_finds_all():
+    kmer_finder = KmerFinder([(0, None, ["teenage", "mutant", "ninja", "turtles"])])
+    assert kmer_finder.kmers_present("Smells like teenage spirit")
+    assert kmer_finder.kmers_present("Everyone with a SNP is technically a mutant.")
+    assert kmer_finder.kmers_present("He made a ninja PR that was merged before review")
+    assert kmer_finder.kmers_present(
+        "Turtles are treated as outgroup, for 'more advanced' reptiles but "
+        "molecular evidence suggests they are more close to the dinosaurs than "
+        "previously thought.")
+    assert not kmer_finder.kmers_present(
+        "A turtle maybe slow, but it also lives for a long time.")
