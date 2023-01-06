@@ -106,7 +106,7 @@ cdef class KmerFinder:
             ssize_t start, stop
             const bitmask_t *mask_ptr
             const char *search_ptr
-            const char *search_result
+            bint search_result
             ssize_t search_length
         if not PyUnicode_IS_COMPACT_ASCII(sequence):
             raise ValueError("Only ASCII strings are supported")
@@ -134,8 +134,8 @@ cdef class KmerFinder:
             search_ptr = seq + start
             kmer_length = entry.kmer_length
             mask_ptr = self.kmer_masks + entry.mask_offset
-            search_result = shift_or_search(search_ptr, search_length,
-                                            mask_ptr, kmer_length)
+            search_result = shift_or_multiple_is_present(
+                search_ptr, search_length, mask_ptr, <bitmask_t>~1, <bitmask_t>1ULL<<kmer_length)
             if search_result:
                 return True
         return False
@@ -244,20 +244,22 @@ cdef populate_needle_mask(bitmask_t *needle_mask, const char *needle, size_t nee
                 needle_mask[<uint8_t>c] &= ~(<bitmask_t>1ULL << i)
 
 
-cdef const char *shift_or_search(const char *haystack, size_t haystack_length,
-                           const bitmask_t *needle_mask, size_t needle_length):
+cdef bint shift_or_multiple_is_present(
+    const char *haystack,
+    size_t haystack_length,
+    const bitmask_t *needle_mask,
+    bitmask_t zero_mask,
+    bitmask_t found_mask):
     cdef:
-        bitmask_t R = ~1
+        bitmask_t R = zero_mask
         size_t i
-
-    if needle_length == 0:
-        return haystack
 
     for i in range(haystack_length):
         # Update the bit array
         R |= needle_mask[<uint8_t>haystack[i]]
         R <<= 1
-        if (0 == (R & (<bitmask_t>1ULL << needle_length))):
-            return (haystack + i - needle_length) + 1
+        R &= zero_mask
+        if ((R & found_mask) != found_mask):
+            return True
 
-    return NULL
+    return False
