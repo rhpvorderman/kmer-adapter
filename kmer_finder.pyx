@@ -92,8 +92,8 @@ cdef class KmerFinder:
                 zero_mask ^= <bitmask_t>1ULL << offset
                 kmer_length = PyUnicode_GET_LENGTH(kmer)
                 kmer_ptr = <char *> PyUnicode_DATA(kmer)
-                memcpy(search_word, kmer_ptr, kmer_length)
-                search_word[kmer_length] = 0
+                memcpy(search_word + offset, kmer_ptr, kmer_length)
+                search_word[offset + kmer_length] = 0
                 found_mask |= <bitmask_t>1ULL << (offset + kmer_length)
                 offset = offset + kmer_length + 1
             self.search_entries[i].search_start  = start
