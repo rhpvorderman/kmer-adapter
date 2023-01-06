@@ -88,8 +88,9 @@ def test_kmer_finder_initialize_bigword():
 
 
 def test_kmer_finder_initialize_total_greater_than_max():
-    kmer_finder = KmerFinder([(0, None, ["A" * 31, "B" * 31, "C" * 31])])
+    kmer_finder = KmerFinder([(0, None, ["A" * 31, "B" * 31, "C" * 31, "D" * 43])])
     assert kmer_finder.kmers_present("X" * 100 + "A" * 31)
-    # assert kmer_finder.kmers_present("X" * 100 + "B" * 31)
-    # assert kmer_finder.kmers_present("X" * 100 + "C" * 31)
-    # assert not kmer_finder.kmers_present(string.ascii_letters)
+    assert kmer_finder.kmers_present("X" * 100 + "B" * 31)
+    assert kmer_finder.kmers_present("X" * 100 + "C" * 31)
+    assert kmer_finder.kmers_present("X" * 100 + "D" * 43)
+    assert not kmer_finder.kmers_present(string.ascii_letters)
