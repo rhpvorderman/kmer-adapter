@@ -1,6 +1,6 @@
 # cython: profile=False, emit_code_comments=False, language_level=3
 
-from cpython.mem cimport PyMem_Malloc, PyMem_Free
+from cpython.mem cimport PyMem_Realloc, PyMem_Free
 from libc.string cimport memcpy, memset, strlen
 
 from cpython.unicode cimport PyUnicode_CheckExact, PyUnicode_GET_LENGTH
@@ -70,10 +70,7 @@ cdef class KmerFinder:
         self.number_of_searches = 0
         self.ref_wildcards = ref_wildcards
         self.query_wildcards = query_wildcards
-        number_of_entries = len(positions_and_kmers)
-        self.search_entries = <KmerSearchEntry *>PyMem_Malloc(number_of_entries * sizeof(KmerSearchEntry))
-        self.search_masks = <bitmask_t *>PyMem_Malloc(number_of_entries * sizeof(bitmask_t) * BITMASK_INDEX_SIZE)
-        self.number_of_searches = number_of_entries
+        self.number_of_searches = 0
         cdef size_t mask_offset = 0
         cdef char *kmer_ptr
         cdef size_t offset
@@ -87,34 +84,44 @@ cdef class KmerFinder:
 
         for i, (start, stop, kmers) in enumerate(positions_and_kmers):
             memset(search_word, 0, 64)
-            offset = 0
-            zero_mask = ~0
-            found_mask = 0
-            for kmer in kmers:
-                if not PyUnicode_CheckExact(kmer):
-                    raise TypeError(f"Kmer should be a string not {type(kmer)}")
-                if not PyUnicode_IS_COMPACT_ASCII(kmer):
-                    raise ValueError("Only ASCII strings are supported")
-                kmer_length = PyUnicode_GET_LENGTH(kmer)
-                if kmer_length > max_word_length:
-                    raise ValueError(f"{kmer} of length {kmer_length} is longer "
-                                     f"than the maximum of {max_word_length}.")
-                zero_mask ^= <bitmask_t>1ULL << offset
-                kmer_ptr = <char *> PyUnicode_DATA(kmer)
-                memcpy(search_word + offset, kmer_ptr, kmer_length)
-                search_word[offset + kmer_length] = 0
-                found_mask |= <bitmask_t>1ULL << (offset + kmer_length)
-                offset = offset + kmer_length + 1
-            self.search_entries[i].search_start  = start
-            if stop is None:
-                stop = 0
-            self.search_entries[i].search_stop = stop
-            self.search_entries[i].mask_offset = mask_offset
-            self.search_entries[i].zero_mask = zero_mask
-            self.search_entries[i].found_mask = found_mask
-            populate_needle_mask(self.search_masks + mask_offset, search_word, offset,
-                                 self.ref_wildcards, self.query_wildcards)
-            mask_offset += BITMASK_INDEX_SIZE
+            index = 0 
+            while index < len(kmers):
+                offset = 0
+                zero_mask = ~0
+                found_mask = 0
+                while index < len(kmers):
+                    kmer = kmers[index]
+                    if not PyUnicode_CheckExact(kmer):
+                        raise TypeError(f"Kmer should be a string not {type(kmer)}")
+                    if not PyUnicode_IS_COMPACT_ASCII(kmer):
+                        raise ValueError("Only ASCII strings are supported")
+                    kmer_length = PyUnicode_GET_LENGTH(kmer)
+                    if kmer_length > max_word_length:
+                        raise ValueError(f"{kmer} of length {kmer_length} is longer "
+                                         f"than the maximum of {max_word_length}.")
+                    if (offset + kmer_length + 1) > max_total_length:
+                        break
+                    zero_mask ^= <bitmask_t>1ULL << offset
+                    kmer_ptr = <char *> PyUnicode_DATA(kmer)
+                    memcpy(search_word + offset, kmer_ptr, kmer_length)
+                    search_word[offset + kmer_length] = 0
+                    found_mask |= <bitmask_t>1ULL << (offset + kmer_length)
+                    offset = offset + kmer_length + 1
+                    index += 1
+                self.number_of_searches += 1
+                self.search_entries = <KmerSearchEntry *>PyMem_Realloc(self.search_entries, self.number_of_searches * sizeof(KmerSearchEntry))
+                self.search_masks = <bitmask_t *>PyMem_Realloc(self.search_masks, self.number_of_searches * sizeof(bitmask_t) * BITMASK_INDEX_SIZE)
+                self.search_entries[i].search_start  = start
+                if stop is None:
+                    stop = 0
+                self.search_entries[i].search_stop = stop
+                self.search_entries[i].mask_offset = mask_offset
+                self.search_entries[i].zero_mask = zero_mask
+                self.search_entries[i].found_mask = found_mask
+                # Offset -1 because we don't count the last NULL byte
+                populate_needle_mask(self.search_masks + mask_offset, search_word, offset - 1,
+                                     self.ref_wildcards, self.query_wildcards)
+                mask_offset += BITMASK_INDEX_SIZE
         self.positions_and_kmers = positions_and_kmers
 
     def __reduce__(self):
