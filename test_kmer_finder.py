@@ -48,7 +48,7 @@ def test_kmer_finder(
     sequence: str,
     expected: bool,
 ):
-    kmer_finder = KmerFinder([(kmer, start, stop)], ref_wildcards, query_wildcards)
+    kmer_finder = KmerFinder([(start, stop, [kmer])], ref_wildcards, query_wildcards)
     assert kmer_finder.kmers_present(sequence) is expected
 
 
@@ -66,7 +66,7 @@ def test_kmer_finder_per_char_matching(
 ):
     for char in string.ascii_letters:
         kmer_finder = KmerFinder(
-            [(char, 0, None)],
+            [(0, None, [char])],
             ref_wildcards=ref_wildcards,
             query_wildcards=query_wildcards,
         )
