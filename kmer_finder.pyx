@@ -82,7 +82,7 @@ cdef class KmerFinder:
         # The maximum length of a word. Since word_length + 1 bits are needed to search.
         cdef ssize_t max_word_length = max_total_length - 1
 
-        for i, (start, stop, kmers) in enumerate(positions_and_kmers):
+        for (start, stop, kmers) in positions_and_kmers:
             memset(search_word, 0, 64)
             index = 0 
             while index < len(kmers):
@@ -108,9 +108,11 @@ cdef class KmerFinder:
                     found_mask |= <bitmask_t>1ULL << (offset + kmer_length)
                     offset = offset + kmer_length + 1
                     index += 1
+                i = self.number_of_searches  # Save the index position for the mask and entry
                 self.number_of_searches += 1
                 self.search_entries = <KmerSearchEntry *>PyMem_Realloc(self.search_entries, self.number_of_searches * sizeof(KmerSearchEntry))
                 self.search_masks = <bitmask_t *>PyMem_Realloc(self.search_masks, self.number_of_searches * sizeof(bitmask_t) * BITMASK_INDEX_SIZE)
+                mask_offset = i * BITMASK_INDEX_SIZE
                 self.search_entries[i].search_start  = start
                 if stop is None:
                     stop = 0
@@ -121,7 +123,6 @@ cdef class KmerFinder:
                 # Offset -1 because we don't count the last NULL byte
                 populate_needle_mask(self.search_masks + mask_offset, search_word, offset - 1,
                                      self.ref_wildcards, self.query_wildcards)
-                mask_offset += BITMASK_INDEX_SIZE
         self.positions_and_kmers = positions_and_kmers
 
     def __reduce__(self):
