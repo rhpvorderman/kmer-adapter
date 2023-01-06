@@ -109,57 +109,31 @@ def create_back_overlap_searchsets(
 ) -> List[SearchSet]:
     adapter_length = len(adapter)
     error_lengths = []
-    max_error = 1
+    max_error = 0
     search_sets: List[SearchSet] = []
     for i in range(adapter_length + 1):
-        if i * error_rate >= max_error:
-            error_lengths.append(i)
+        if int(i * error_rate) > max_error:
+            error_lengths.append((max_error, i - 1))
             max_error += 1
+    error_lengths.append((max_error, adapter_length))
 
-    # Add a couple of directly matching 1, 2, 3 and 4-mer searches.
-    # The probability of a false positive is just to high when for example
-    # a 3-mer is evaluated in more than one position.
-    min_overlap_kmer_length = 5
-    if min_overlap < min_overlap_kmer_length:
-        for i in range(min_overlap, min_overlap_kmer_length):
-            search_sets.append(
-                (
-                    -i,
-                    None,
-                    [
-                        {
-                            adapter[:i],
-                        }
-                    ],
-                )
-            )
-        min_overlap = min_overlap_kmer_length
-    # Build up the array with chunks which should occur at the tail end
-    # if the adapter overlaps with the end.
-    min_overlap_kmer = adapter[:min_overlap]
-    min_overlap_kmer_start = (
-        -(error_lengths[0] - 1) if error_lengths else -adapter_length
-    )
-    search_sets.append(
-        (
-            min_overlap_kmer_start,
-            None,
-            [
-                {
-                    min_overlap_kmer,
-                }
-            ],
-        )
-    )
-    for i, error_length in enumerate(error_lengths):
-        if (i + 1) < len(error_lengths):
-            check_length = error_lengths[i + 1] - 1
-        else:
-            check_length = adapter_length
-        start = -check_length
-        number_of_errors = i + 1
-        kmer_sets = kmer_possibilities(adapter[:error_length], number_of_errors + 1)
-        search_sets.append((start, None, kmer_sets))
+    minimum_length = min_overlap
+    for max_errors, length in error_lengths:
+        if minimum_length > length:
+            continue
+        if max_errors == 0:
+            # Add a couple of directly matching 1, 2, 3 and 4-mer searches.
+            # The probability of a false positive is just to high when for
+            # example a 3-mer is evaluated in more than one position.
+            min_overlap_kmer_length = 5
+            if minimum_length < min_overlap_kmer_length:
+                for i in range(minimum_length, min_overlap_kmer_length):
+                    search_set = (-i, None, [{adapter[:i]}])
+                    search_sets.append(search_set)
+                minimum_length = min_overlap_kmer_length
+        kmer_sets = kmer_possibilities(adapter[:minimum_length], max_errors + 1)
+        search_sets.append((-length, None, kmer_sets))
+        minimum_length = length + 1
     return search_sets
 
 
@@ -200,7 +174,7 @@ def create_kmers_and_positions(
 
 def kmer_probability_analysis(
     kmers_and_offsets: List[Tuple[str, int, Optional[int]]], default_length: int = 150
-) -> str:
+) -> str:  # pragma: no cover  # only for debugging use
     out = io.StringIO()
     out.write(
         "kmer\tstart\tstop\tconsidered sites\thit chance by random sequence (%)\n"
