@@ -85,3 +85,7 @@ def test_kmer_finder_initialize_bigword():
         KmerFinder([(0, None, ["A" * 64])])
     error.match("A" * 64)
     error.match("64")
+
+
+def test_kmer_finder_initialize_total_greater_than_max():
+    KmerFinder([(0, None, ["A" * 31, "A" * 31, "A" * 31])])
