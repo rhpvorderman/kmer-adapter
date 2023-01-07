@@ -18,11 +18,11 @@ cdef extern from "Python.h":
     bint PyUnicode_IS_COMPACT_ASCII(object o)
 
 ctypedef struct KmerSearchEntry:
-    size_t mask_offset
     ssize_t search_start
     ssize_t search_stop
     bitmask_t zero_mask
     bitmask_t found_mask
+    bitmask_t[BITMASK_INDEX_SIZE] needle_mask
 
 
 cdef class KmerFinder:
@@ -57,7 +57,6 @@ cdef class KmerFinder:
     """
     cdef:
         KmerSearchEntry *search_entries
-        bitmask_t *search_masks
         size_t number_of_searches
         readonly object positions_and_kmers
         readonly bint ref_wildcards
@@ -65,13 +64,11 @@ cdef class KmerFinder:
 
     def __cinit__(self, positions_and_kmers, ref_wildcards=False, query_wildcards=False):
         cdef char[64] search_word
-        self.search_masks = NULL
         self.search_entries = NULL
         self.number_of_searches = 0
         self.ref_wildcards = ref_wildcards
         self.query_wildcards = query_wildcards
         self.number_of_searches = 0
-        cdef size_t mask_offset = 0
         cdef char *kmer_ptr
         cdef size_t offset
         cdef bitmask_t zero_mask, found_mask
@@ -111,17 +108,14 @@ cdef class KmerFinder:
                 i = self.number_of_searches  # Save the index position for the mask and entry
                 self.number_of_searches += 1
                 self.search_entries = <KmerSearchEntry *>PyMem_Realloc(self.search_entries, self.number_of_searches * sizeof(KmerSearchEntry))
-                self.search_masks = <bitmask_t *>PyMem_Realloc(self.search_masks, self.number_of_searches * sizeof(bitmask_t) * BITMASK_INDEX_SIZE)
-                mask_offset = i * BITMASK_INDEX_SIZE
                 self.search_entries[i].search_start  = start
                 if stop is None:
                     stop = 0
                 self.search_entries[i].search_stop = stop
-                self.search_entries[i].mask_offset = mask_offset
                 self.search_entries[i].zero_mask = zero_mask
                 self.search_entries[i].found_mask = found_mask
                 # Offset -1 because we don't count the last NULL byte
-                populate_needle_mask(self.search_masks + mask_offset, search_word, offset - 1,
+                populate_needle_mask(self.search_entries[i].needle_mask, search_word, offset - 1,
                                      self.ref_wildcards, self.query_wildcards)
         self.positions_and_kmers = positions_and_kmers
 
@@ -136,7 +130,6 @@ cdef class KmerFinder:
             bitmask_t zero_mask
             bitmask_t found_mask
             ssize_t start, stop
-            const bitmask_t *mask_ptr
             const char *search_ptr
             bint search_result
             ssize_t search_length
@@ -164,17 +157,14 @@ cdef class KmerFinder:
             if search_length <= 0:
                 continue
             search_ptr = seq + start
-            zero_mask = entry.zero_mask
-            found_mask = entry.found_mask
-            mask_ptr = self.search_masks + entry.mask_offset
             search_result = shift_or_multiple_is_present(
-                search_ptr, search_length, mask_ptr, zero_mask, found_mask)
+                search_ptr, search_length, entry.needle_mask, entry.zero_mask,
+                entry.found_mask)
             if search_result:
                 return True
         return False
 
     def __dealloc__(self):
-        PyMem_Free(self.search_masks)
         PyMem_Free(self.search_entries)
 
 
