@@ -54,6 +54,8 @@ cdef class KmerFinder:
     This is more efficient as the kmers_present method can be applied to a lot
     of sequences and all the necessary unpacking for each kmer into C variables
     happens only once.
+    Note that multiple kmers can be given per position. Kmerfinder finds
+    all of these simultaneously using a multiple pattern matching algorithm.
     """
     cdef:
         KmerSearchEntry *search_entries
@@ -83,12 +85,15 @@ cdef class KmerFinder:
         cdef ssize_t max_word_length = max_total_length - 1
 
         for (start, stop, kmers) in positions_and_kmers:
-            memset(search_word, 0, 64)
             index = 0 
             while index < len(kmers):
+                memset(search_word, 0, 64)
                 offset = 0
                 zero_mask = ~0
                 found_mask = 0
+                # Run an inner loop in case all words combined are larger than
+                # the maximum bitmask size. In that case we create multiple
+                # bitmasks to hold all the words.
                 while index < len(kmers):
                     kmer = kmers[index]
                     if not PyUnicode_CheckExact(kmer):
